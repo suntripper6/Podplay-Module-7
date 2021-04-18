@@ -105,4 +105,5 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
     private fun hideProgressBar() {
         progressBar.visibility = View.INVISIBLE
     }
+    //*******************************************************
 }
