@@ -11,9 +11,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     data class PodcastSummaryViewData(
         var name: String? = "",
-        var lastUpdated: String = "",
-        var imageUrl: String = "",
-        var feedUrl: String = "")
+        var lastUpdated: String? = "",
+        var imageUrl: String? = "",
+        var feedUrl: String? = "")
 
     // Helper for conversion
     private fun itunesPodcastToPodcastSummaryView(

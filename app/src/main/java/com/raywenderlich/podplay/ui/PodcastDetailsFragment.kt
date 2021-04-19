@@ -4,8 +4,10 @@ import android.os.Bundle
 import android.view.*
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import com.bumptech.glide.Glide
 import com.raywenderlich.podplay.R
 import com.raywenderlich.podplay.viewmodel.PodcastViewModel
+import kotlinx.android.synthetic.main.fragment_podcast_details.*
 
 // Displays podcast details
 class PodcastDetailsFragment : Fragment() {
@@ -25,6 +27,7 @@ class PodcastDetailsFragment : Fragment() {
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
+        updateControls()
     }
 
     // 2
@@ -34,5 +37,19 @@ class PodcastDetailsFragment : Fragment() {
     }
 
     // User interface controls
+    private fun updateControls() {
+        val viewData = podcastViewModel.activePodcastViewData ?: return
+        feedTitleTextView.text = viewData.feeTitle
+        feedDescTextView.text = viewData.feedDesc
+        activity?.let { activity ->
+            Glide.with(activity).load(viewData.imageUrl).into(feedImageView)
+        }
+    }
 
+    // Instance of a fragment
+    companion object {
+        fun newInstance(): PodcastDetailsFragment {
+            return PodcastDetailsFragment()
+        }
+    }
 }
