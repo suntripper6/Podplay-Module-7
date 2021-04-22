@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.raywenderlich.podplay.R
 import com.raywenderlich.podplay.adapter.PodcastListAdapter
+import com.raywenderlich.podplay.db.PodPlayDatabase
 import com.raywenderlich.podplay.repository.ItunesRepo
 import com.raywenderlich.podplay.repository.PodcastRepo
 import com.raywenderlich.podplay.service.FeedService
@@ -24,7 +25,9 @@ import com.raywenderlich.podplay.viewmodel.SearchViewModel
 import kotlinx.android.synthetic.main.activity_podcast.*
 
 
-class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapterListener {
+class PodcastActivity : AppCompatActivity(),
+    PodcastListAdapter.PodcastListAdapterListener,
+    PodcastDetailsFragment.OnPodcastDetailsListener {
 
     private val searchViewModel by viewModels<SearchViewModel>()
     private lateinit var podcastListAdapter: PodcastListAdapter
@@ -95,7 +98,10 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
         val service = ItunesService.instance
         searchViewModel.iTunesRepo = ItunesRepo(service)
         val rssService = FeedService.instance
-        podcastViewModel.podcastRepo = PodcastRepo(rssService)
+        //podcastViewModel.podcastRepo = PodcastRepo(rssService)
+        val db = PodPlayDatabase.getInstance(this)
+        val podcastDao = db.podcastDao()
+        podcastViewModel.podcastRepo = PodcastRepo(rssService, podcastDao)
     }
     private fun updateControls() {
         podcastRecyclerView.setHasFixedSize(true)
@@ -180,6 +186,12 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
             .setPositiveButton(getString(R.string.ok_button), null)
             .create()
             .show()
+    }
+
+    // SUBSCRIBE
+    override fun onSubscribe() {
+        podcastViewModel.saveActivePodcast()
+        supportFragmentManager.popBackStack()
     }
 
     // Identifies details fragment

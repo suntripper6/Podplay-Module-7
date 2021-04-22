@@ -1,5 +1,7 @@
 package com.raywenderlich.podplay.repository
 
+import androidx.lifecycle.LiveData
+import com.raywenderlich.podplay.db.PodcastDao
 import com.raywenderlich.podplay.model.Episode
 import com.raywenderlich.podplay.model.Podcast
 import com.raywenderlich.podplay.service.FeedService
@@ -11,7 +13,8 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
 // Retrieve feed from URL
-class PodcastRepo(private var feedService: FeedService) {
+class PodcastRepo(private var feedService: FeedService,
+                 private var podcastDao: PodcastDao) {
 
     fun getPodcast(feedUrl: String, callback: (Podcast?) -> Unit) {
 
@@ -31,6 +34,7 @@ class PodcastRepo(private var feedService: FeedService) {
         return episodeResponses.map {
             Episode(
                 it.guid ?: "",
+                null,
                 it.title ?: "",
                 it.description ?: "",
                 it.url ?: "",
@@ -48,7 +52,25 @@ class PodcastRepo(private var feedService: FeedService) {
         val description = if (rssResponse.description == "")
             rssResponse.summary else rssResponse.description
         // 3
-        return Podcast(feedUrl, rssResponse.title, description, imageUrl,
-                       rssResponse.lastUpdated, episodes = rssItemsToEpisodes(items))
+        return Podcast(null, feedUrl, rssResponse.title, description, imageUrl,
+                        rssResponse.lastUpdated, episodes = rssItemsToEpisodes(items))
+    }
+
+    // Inserts Podcast and Episodes into the DB
+    fun save(podcast: Podcast) {
+        GlobalScope.launch {
+            // 1
+            val podcastId = podcastDao.insertPodcast(podcast)
+            // 2
+            for (episode in podcast.episodes) {
+                // 3
+                episode.podcastId = podcastId
+                podcastDao.insertEpisode(episode)
+            }
+        }
+    }
+    // Retrieves from DB
+    fun getAll(): LiveData<List<Podcast>> {
+        return podcastDao.loadPodcasts()
     }
 }

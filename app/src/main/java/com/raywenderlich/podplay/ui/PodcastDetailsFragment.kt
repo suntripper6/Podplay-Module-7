@@ -1,5 +1,6 @@
 package com.raywenderlich.podplay.ui
 
+import android.content.Context
 import android.os.Bundle
 import android.text.method.ScrollingMovementMethod
 import android.view.*
@@ -12,10 +13,11 @@ import com.raywenderlich.podplay.R
 import com.raywenderlich.podplay.adapter.EpisodeListAdapter
 import com.raywenderlich.podplay.viewmodel.PodcastViewModel
 import kotlinx.android.synthetic.main.fragment_podcast_details.*
+import java.lang.RuntimeException
 
 // Displays podcast details
 class PodcastDetailsFragment : Fragment() {
-
+    private var listener: OnPodcastDetailsListener? = null
     private lateinit var episodeListAdapter: EpisodeListAdapter
     private val podcastViewModel: PodcastViewModel by activityViewModels()
 
@@ -69,10 +71,35 @@ class PodcastDetailsFragment : Fragment() {
         episodeRecyclerView.adapter = episodeListAdapter
     }
 
+    // SUBSCRIBE
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        if (context is OnPodcastDetailsListener) {
+            listener = context
+        } else {
+            throw RuntimeException(context.toString() + " must implement OnPodcastDetailsListener")
+        }
+    }
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.menu_feed_action -> {
+                podcastViewModel.activePodcastViewData?.feedUrl.let {
+                    listener?.onSubscribe()
+                }
+                return true
+            }
+            else -> return super.onOptionsItemSelected(item)
+        }
+    }
+
     // Instance of a fragment
     companion object {
         fun newInstance(): PodcastDetailsFragment {
             return PodcastDetailsFragment()
         }
+    }
+
+    interface OnPodcastDetailsListener {
+        fun onSubscribe()
     }
 }
