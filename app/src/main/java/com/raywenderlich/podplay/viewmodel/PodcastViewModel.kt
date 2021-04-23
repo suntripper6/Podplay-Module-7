@@ -43,9 +43,13 @@ class PodcastViewModel(application: Application) : AndroidViewModel(application)
     }
     // Conversion to PodcastViewData object
     private fun podcastToPodcastView(podcast: Podcast): PodcastViewData {
-        return PodcastViewData(false, podcast.feedTitle, podcast.feedUrl,
-                                podcast.feedDesc, podcast.imageUrl,
-                                episodesToEpisodesView(podcast.episodes))
+        return PodcastViewData(
+            podcast.id != null,
+            podcast.feedTitle,
+            podcast.feedUrl,
+            podcast.feedDesc,
+            podcast.imageUrl,
+            episodesToEpisodesView(podcast.episodes))
     }
     // Retrieve podast from Repo
     // 1
@@ -101,5 +105,11 @@ class PodcastViewModel(application: Application) : AndroidViewModel(application)
         }
         // 4
         return livePodcastData
+    }
+    fun deleteActivePodcast() {
+        val repo = podcastRepo ?: return
+        activePodcast?.let {
+            repo.delete(it)
+        }
     }
 }

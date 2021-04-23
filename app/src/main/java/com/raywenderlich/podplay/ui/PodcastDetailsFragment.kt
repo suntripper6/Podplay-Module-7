@@ -17,6 +17,7 @@ import java.lang.RuntimeException
 
 // Displays podcast details
 class PodcastDetailsFragment : Fragment() {
+    private var menuItem: MenuItem? = null
     private var listener: OnPodcastDetailsListener? = null
     private lateinit var episodeListAdapter: EpisodeListAdapter
     private val podcastViewModel: PodcastViewModel by activityViewModels()
@@ -27,8 +28,10 @@ class PodcastDetailsFragment : Fragment() {
         setHasOptionsMenu(true)
     }
 
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
-                            savedInstanceState: Bundle?) : View? {
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
         return inflater.inflate(R.layout.fragment_podcast_details, container, false)
     }
 
@@ -42,6 +45,8 @@ class PodcastDetailsFragment : Fragment() {
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         super.onCreateOptionsMenu(menu, inflater)
         inflater.inflate(R.menu.menu_details, menu)
+        menuItem = menu.findItem(R.id.menu_feed_action)
+        updateMenuItem()
     }
 
     // User interface controls
@@ -63,15 +68,17 @@ class PodcastDetailsFragment : Fragment() {
         val layoutManager = LinearLayoutManager(activity)
         episodeRecyclerView.layoutManager = layoutManager
 
-        val dividerItemDecoration = DividerItemDecoration(episodeRecyclerView.context,
-                                    layoutManager.orientation)
+        val dividerItemDecoration = DividerItemDecoration(
+            episodeRecyclerView.context,
+            layoutManager.orientation
+        )
         episodeRecyclerView.addItemDecoration(dividerItemDecoration)
         // 3
         episodeListAdapter = EpisodeListAdapter(podcastViewModel.activePodcastViewData?.episodes)
         episodeRecyclerView.adapter = episodeListAdapter
     }
 
-    // SUBSCRIBE
+    // SUBSCRIPTIONS
     override fun onAttach(context: Context) {
         super.onAttach(context)
         if (context is OnPodcastDetailsListener) {
@@ -80,16 +87,28 @@ class PodcastDetailsFragment : Fragment() {
             throw RuntimeException(context.toString() + " must implement OnPodcastDetailsListener")
         }
     }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
+        return when (item.itemId) {
             R.id.menu_feed_action -> {
-                podcastViewModel.activePodcastViewData?.feedUrl.let {
+                if (item.title == getString(R.string.unsubscribe)) {
+                    listener?.onUnSubscribe()
+                } else {
                     listener?.onSubscribe()
                 }
                 return true
             }
-            else -> return super.onOptionsItemSelected(item)
+            else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    private fun updateMenuItem() {
+        // 1
+        val viewData = podcastViewModel.activePodcastViewData ?: return
+        // 2
+        menuItem?.title = if (viewData.subscribed)
+            getString(R.string.unsubscribe) else
+                getString(R.string.subscribe)
     }
 
     // Instance of a fragment
@@ -101,5 +120,6 @@ class PodcastDetailsFragment : Fragment() {
 
     interface OnPodcastDetailsListener {
         fun onSubscribe()
+        fun onUnSubscribe()
     }
 }

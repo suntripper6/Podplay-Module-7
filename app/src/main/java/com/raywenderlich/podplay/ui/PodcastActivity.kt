@@ -11,6 +11,7 @@ import android.view.View
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
+import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.raywenderlich.podplay.R
@@ -42,6 +43,7 @@ class PodcastActivity : AppCompatActivity(),
         setupToolbar()
         setupViewModels()
         updateControls()
+        setupPodcastListView()
         handleIntent(intent)
         addBackStackListener()
     }
@@ -54,6 +56,17 @@ class PodcastActivity : AppCompatActivity(),
         // 2
         searchMenuItem = menu.findItem(R.id.search_item)
         val searchView = searchMenuItem.actionView as SearchView
+
+        searchMenuItem.setOnActionExpandListener(object: MenuItem.OnActionExpandListener{
+            override fun onMenuItemActionExpand(p0: MenuItem?): Boolean {
+                return true
+            }
+            override fun onMenuItemActionCollapse(p0: MenuItem?): Boolean {
+                showSubscribedPodcasts()
+                return true
+            }
+        })
+
         // 3
         val searchManager = getSystemService(Context.SEARCH_SERVICE) as SearchManager
         // 4
@@ -74,7 +87,7 @@ class PodcastActivity : AppCompatActivity(),
         searchViewModel.searchPodcasts(term) {results ->
             hideProgressBar()
             toolbar.title = term
-            podcastListAdapter.setSearchdata(results)
+            podcastListAdapter.setSearchData(results)
         }
     }
     private fun handleIntent(intent: Intent) {
@@ -191,6 +204,29 @@ class PodcastActivity : AppCompatActivity(),
     // SUBSCRIBE
     override fun onSubscribe() {
         podcastViewModel.saveActivePodcast()
+        supportFragmentManager.popBackStack()
+    }
+    // SHOW SUBSCRIPTIONS
+    private fun showSubscribedPodcasts() {
+        // 1
+        val podcasts = podcastViewModel.getPodcasts()?.value
+        // 2
+        if (podcasts != null) {
+            toolbar.title = getString(R.string.subscribed_podcasts)
+            podcastListAdapter.setSearchData(podcasts)
+        }
+    }
+    // LATEST SUBS
+    private fun setupPodcastListView() {
+        podcastViewModel.getPodcasts()?.observe(this, Observer {
+            if (it != null) {
+                showSubscribedPodcasts()
+            }
+        })
+    }
+
+    override fun onUnSubscribe() {
+        podcastViewModel.deleteActivePodcast()
         supportFragmentManager.popBackStack()
     }
 

@@ -42,7 +42,7 @@ class PodcastListAdapter(
             }
         }
     }
-    fun setSearchdata(podcastSummaryViewData: List<SearchViewModel.PodcastSummaryViewData>) {
+    fun setSearchData(podcastSummaryViewData: List<SearchViewModel.PodcastSummaryViewData>) {
         podcastSummaryViewList = podcastSummaryViewData
         this.notifyDataSetChanged()
     }
