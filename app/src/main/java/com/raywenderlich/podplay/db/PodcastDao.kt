@@ -22,6 +22,9 @@ interface PodcastDao {
     @Query("SELECT * FROM Podcast WHERE feedUrl = :url")
     fun loadPodcast(url: String): Podcast?
 
+    @Query("SELECT * FROM Podcast ORDER BY FeedTitle") // Update podcast/episode in bkgrnd
+    fun loadPodcastsStatic(): List<Podcast>
+
     @Insert(onConflict = REPLACE)
     fun insertPodcast(podcast: Podcast): Long
 
