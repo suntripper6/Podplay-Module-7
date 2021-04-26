@@ -12,12 +12,19 @@ import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 
+interface PodplayMediaListener {
+    fun onStateChanged()
+    fun onStopPlaying()
+    fun onPausePlaying()
+}
+
 class PodplayMediaCallback(
     val context: Context,
     val mediaSession: MediaSessionCompat,
     var mediaPlayer: MediaPlayer? = null
 ) : MediaSessionCompat.Callback() {
 
+    var listener: PodplayMediaListener? = null
     private var mediaUri: Uri? = null
     private var newMedia: Boolean = false
     private var mediaExtras: Bundle? = null
@@ -55,6 +62,7 @@ class PodplayMediaCallback(
         super.onStop()
         println("onStop called")
         stopPlaying()
+        listener?.onStopPlaying()
     }
 
     override fun onPause() {
@@ -62,6 +70,7 @@ class PodplayMediaCallback(
         println("onPause called")
         //setState(PlaybackStateCompat.STATE_PAUSED)
         pausePlaying()
+        listener?.onPausePlaying()
     }
 
     // Helper method for state of media session
@@ -82,6 +91,11 @@ class PodplayMediaCallback(
             .build()
 
         mediaSession.setPlaybackState(playbackState)
+
+        if (state == PlaybackStateCompat.STATE_PAUSED ||
+            state == PlaybackStateCompat.STATE_PLAYING) {
+            listener?.onStateChanged()
+        }
     }
 
     private fun setNewMedia(uri: Uri?) {
@@ -150,16 +164,20 @@ class PodplayMediaCallback(
                     mediaPlayer.reset()
                     mediaPlayer.setDataSource(context, mediaUri)
                     mediaPlayer.prepare()
-                    mediaSession.setMetadata(
-                        MediaMetadataCompat.Builder()
-                            .putString(
-                                MediaMetadataCompat.METADATA_KEY_MEDIA_URI,
-                                mediaUri.toString()
-                            )
-                            .build()
-                    )
+                    mediaExtras?.let { mediaExtras ->
+                        mediaSession.setMetadata(MediaMetadataCompat.Builder()
+                            .putString(MediaMetadataCompat.METADATA_KEY_TITLE,
+                                mediaExtras.getString(
+                                    MediaMetadataCompat.METADATA_KEY_TITLE))
+                            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST,
+                                mediaExtras.getString(
+                                    MediaMetadataCompat.METADATA_KEY_ARTIST))
+                            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI,
+                                mediaExtras.getString(
+                                    MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI))
+                            .build())
+                    }
                 }
-
             }
         }
     }
