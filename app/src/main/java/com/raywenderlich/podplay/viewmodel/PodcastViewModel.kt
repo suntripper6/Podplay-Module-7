@@ -12,6 +12,7 @@ import java.util.*
 
 // For fragment
 class PodcastViewModel(application: Application) : AndroidViewModel(application) {
+    var activeEpisodeViewData: EpisodeViewData? = null
     var livePodcastData: LiveData<List<SearchViewModel.PodcastSummaryViewData>>? = null
     private var activePodcast: Podcast? = null
     var podcastRepo: PodcastRepo? = null

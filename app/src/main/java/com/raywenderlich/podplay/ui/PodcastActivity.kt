@@ -23,6 +23,7 @@ import com.raywenderlich.podplay.repository.PodcastRepo
 import com.raywenderlich.podplay.service.FeedService
 import com.raywenderlich.podplay.service.ItunesService
 import com.raywenderlich.podplay.viewmodel.PodcastViewModel
+import com.raywenderlich.podplay.viewmodel.PodcastViewModel.*
 import com.raywenderlich.podplay.viewmodel.SearchViewModel
 import com.raywenderlich.podplay.worker.EpisodeUpdateWorker
 import kotlinx.android.synthetic.main.activity_podcast.*
@@ -260,9 +261,36 @@ class PodcastActivity : AppCompatActivity(),
                                 ExistingPeriodicWorkPolicy.REPLACE, request)
     }
 
+    override fun onShowEpisodePlayer(episodeViewData: EpisodeViewData) {
+        podcastViewModel.activeEpisodeViewData = episodeViewData
+        showPlayerFragment()
+    }
+
+    private fun createEpisodePlayerFragment(): EpisodePlayerFragment {
+        var episodePlayerFragment =
+            supportFragmentManager.findFragmentByTag(TAG_PLAYER_FRAGMENT) as EpisodePlayerFragment?
+
+        if (episodePlayerFragment == null) {
+            episodePlayerFragment = EpisodePlayerFragment.newInstance()
+        }
+
+        return episodePlayerFragment
+    }
+
+    private fun showPlayerFragment() {
+        val episodePlayerFragment = createEpisodePlayerFragment()
+
+        supportFragmentManager.beginTransaction().replace(R.id.podcastDetailsContainer,
+            episodePlayerFragment, TAG_PLAYER_FRAGMENT).addToBackStack("PlayerFragment")
+            .commit()
+        podcastRecyclerView.visibility= View.INVISIBLE
+        searchMenuItem.isVisible = false
+    }
+
     // Identifies details fragment
     companion object {
         private const val TAG_DETAILS_FRAGMENT = "DetailsFragment"
         private const val TAG_EPISODE_UPDATE_JOB = "com.raywenderlich.podplay.episodes"
+        private const val TAG_PLAYER_FRAGMENT = "PlayerFragment"
     }
 }

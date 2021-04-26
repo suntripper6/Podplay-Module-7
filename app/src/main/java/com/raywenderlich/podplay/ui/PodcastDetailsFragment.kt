@@ -24,6 +24,7 @@ import com.raywenderlich.podplay.adapter.EpisodeListAdapter
 import com.raywenderlich.podplay.adapter.EpisodeListAdapterListener
 import com.raywenderlich.podplay.service.PodplayMediaService
 import com.raywenderlich.podplay.viewmodel.PodcastViewModel
+import com.raywenderlich.podplay.viewmodel.PodcastViewModel.*
 import kotlinx.android.synthetic.main.fragment_podcast_details.*
 import java.lang.RuntimeException
 
@@ -203,7 +204,7 @@ class PodcastDetailsFragment : Fragment(), EpisodeListAdapterListener {
             }
         }
     }
-    private fun startPlaying(episodeViewData: PodcastViewModel.EpisodeViewData) {
+    private fun startPlaying(episodeViewData: EpisodeViewData) {
         val fragmentActivity = activity as FragmentActivity
         val controller = MediaControllerCompat.getMediaController(fragmentActivity)
         //controller.transportControls.playFromUri(Uri.parse(episodeViewData.mediaUrl), null)
@@ -216,28 +217,13 @@ class PodcastDetailsFragment : Fragment(), EpisodeListAdapterListener {
         controller.transportControls.playFromUri(Uri.parse(episodeViewData.mediaUrl), bundle)
     }
 
-    override fun onSelectedEpisode(episodeViewData: PodcastViewModel.EpisodeViewData) {
-        // 1
-        val fragmentActivity = activity as FragmentActivity
-        // 2
-        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
-        // 3
-        if (controller.playbackState != null) {
-            if (controller.playbackState.state == PlaybackStateCompat.STATE_PLAYING) {
-                // 4
-                controller.transportControls.pause()
-            } else {
-                // 5
-                startPlaying(episodeViewData)
-            }
-        } else {
-            // 6
-            startPlaying(episodeViewData)
-        }
+    override fun onSelectedEpisode(episodeViewData: EpisodeViewData) {
+       listener?.onShowEpisodePlayer(episodeViewData)
     }
 
     interface OnPodcastDetailsListener {
         fun onSubscribe()
         fun onUnSubscribe()
+        fun onShowEpisodePlayer(episodeViewData: EpisodeViewData)
     }
 }
