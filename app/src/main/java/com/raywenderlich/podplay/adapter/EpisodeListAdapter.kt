@@ -12,11 +12,27 @@ import com.raywenderlich.podplay.viewmodel.PodcastViewModel
 
 import kotlinx.android.synthetic.main.episode_item.view.*
 
+interface EpisodeListAdapterListener {
+    fun onSelectedEpisode(episodeViewData: PodcastViewModel.EpisodeViewData)
+}
+
 class EpisodeListAdapter(
-    private var episodeViewList: List<PodcastViewModel.EpisodeViewData>?) :
+    private var episodeViewList: List<PodcastViewModel.EpisodeViewData>?,
+    private var episodeListAdapterListener : EpisodeListAdapterListener) :
     RecyclerView.Adapter<EpisodeListAdapter.ViewHolder>() {
 
-        class ViewHolder(v: View) : RecyclerView.ViewHolder(v) {
+        class ViewHolder(v: View,
+                private val episodeListAdapterListener: EpisodeListAdapterListener) :
+                RecyclerView.ViewHolder(v) {
+
+            init {
+                v.setOnClickListener {
+                    episodeViewData?.let {
+                        episodeListAdapterListener.onSelectedEpisode(it)
+                    }
+                }
+            }
+
             var episodeViewData: PodcastViewModel.EpisodeViewData? = null
             var titleTextView: TextView = v.titleView
             var descTextView: TextView = v.descView
@@ -27,7 +43,8 @@ class EpisodeListAdapter(
     override fun onCreateViewHolder(parent: ViewGroup,
                                     viewType: Int): EpisodeListAdapter.ViewHolder {
         return ViewHolder(LayoutInflater.from(parent.context)
-            .inflate(R.layout.episode_item, parent, false))
+            .inflate(R.layout.episode_item, parent, false),
+                episodeListAdapterListener)
     }
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val episodeViewList = episodeViewList ?: return

@@ -14,6 +14,7 @@ import androidx.appcompat.widget.SearchView
 import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.work.*
 import com.raywenderlich.podplay.R
 import com.raywenderlich.podplay.adapter.PodcastListAdapter
 import com.raywenderlich.podplay.db.PodPlayDatabase
@@ -23,7 +24,9 @@ import com.raywenderlich.podplay.service.FeedService
 import com.raywenderlich.podplay.service.ItunesService
 import com.raywenderlich.podplay.viewmodel.PodcastViewModel
 import com.raywenderlich.podplay.viewmodel.SearchViewModel
+import com.raywenderlich.podplay.worker.EpisodeUpdateWorker
 import kotlinx.android.synthetic.main.activity_podcast.*
+import java.util.concurrent.TimeUnit
 
 
 class PodcastActivity : AppCompatActivity(),
@@ -46,6 +49,7 @@ class PodcastActivity : AppCompatActivity(),
         setupPodcastListView()
         handleIntent(intent)
         addBackStackListener()
+        scheduleJobs()
     }
 
     // Search widget and functionality***********************
@@ -94,6 +98,15 @@ class PodcastActivity : AppCompatActivity(),
         if (Intent.ACTION_SEARCH == intent.action) {
             val query = intent.getStringExtra(SearchManager.QUERY) ?: return
             performSearch(query)
+        }
+
+        val podcastFeedUrl = intent.getStringExtra(EpisodeUpdateWorker.EXTRA_FEED_URL)
+        if (podcastFeedUrl != null) {
+            podcastViewModel.setActivePodcast(podcastFeedUrl) {
+                it?.let {
+                    podcastSummaryView -> onShowDetails(podcastSummaryView)
+                }
+            }
         }
     }
     override fun onNewIntent(intent: Intent) {
@@ -230,8 +243,26 @@ class PodcastActivity : AppCompatActivity(),
         supportFragmentManager.popBackStack()
     }
 
+    // Scheduling
+    private fun scheduleJobs() {
+        // 1
+        val constraints: Constraints = Constraints.Builder().apply {
+            setRequiredNetworkType(NetworkType.CONNECTED)
+            setRequiresCharging(true)
+        }.build()
+        // 2
+        val request = PeriodicWorkRequestBuilder<EpisodeUpdateWorker>(
+            1, TimeUnit.HOURS)
+            .setConstraints(constraints)
+            .build()
+        // 3
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(TAG_EPISODE_UPDATE_JOB,
+                                ExistingPeriodicWorkPolicy.REPLACE, request)
+    }
+
     // Identifies details fragment
     companion object {
         private const val TAG_DETAILS_FRAGMENT = "DetailsFragment"
+        private const val TAG_EPISODE_UPDATE_JOB = "com.raywenderlich.podplay.episodes"
     }
 }
