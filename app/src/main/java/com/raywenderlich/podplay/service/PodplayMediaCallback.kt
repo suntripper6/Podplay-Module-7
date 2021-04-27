@@ -12,7 +12,6 @@ import android.os.ResultReceiver
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
-import java.lang.Exception
 
 interface PodplayMediaListener {
     fun onStateChanged()
@@ -273,6 +272,20 @@ class PodplayMediaCallback(
                 mediaPlayer.stop()
                 setState(PlaybackStateCompat.STATE_STOPPED)
             }
+        }
+    }
+
+    override fun onSeekTo(pos: Long) {
+        super.onSeekTo(pos)
+        //1
+        mediaPlayer?.seekTo(pos.toInt())
+        // 2
+        val playbackState: PlaybackStateCompat? = mediaSession.controller.playbackState
+        // 3
+        if (playbackState != null) {
+            setState(playbackState.state)
+        } else {
+            setState(PlaybackStateCompat.STATE_PAUSED)
         }
     }
 
