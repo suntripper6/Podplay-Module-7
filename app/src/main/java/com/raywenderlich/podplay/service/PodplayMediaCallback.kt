@@ -237,6 +237,8 @@ class PodplayMediaCallback(
                                         MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI
                                     )
                                 )
+                                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION,
+                                        mediaPlayer.duration.toLong())
                                 .build()
                         )
                     }

@@ -10,10 +10,12 @@ import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaControllerCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import android.text.format.DateUtils
 import android.text.method.ScrollingMovementMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.SeekBar
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.activityViewModels
@@ -28,6 +30,8 @@ import kotlinx.android.synthetic.main.fragment_episode_player.*
 
 class EpisodePlayerFragment : Fragment() {
 
+    private var draggingScrubber: Boolean = false
+    private var episodeDuration: Long = 0
     private var playerSpeed: Float = 1.0f
     private lateinit var mediaBrowser: MediaBrowserCompat
     private var mediaControllerCallback: MediaControllerCallback? = null
@@ -44,6 +48,8 @@ class EpisodePlayerFragment : Fragment() {
         override fun onMetadataChanged(metadata: MediaMetadataCompat?) {
             super.onMetadataChanged(metadata)
             println("metadata changed to ${metadata?.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_URI)}")
+
+            metadata?.let { updateControlsFromMetadata(it) }
         }
 
         override fun onPlaybackStateChanged(state: PlaybackStateCompat?) {
@@ -195,6 +201,35 @@ class EpisodePlayerFragment : Fragment() {
         replayButton.setOnClickListener {
             seekBy(-10)
         }
+
+        // 1
+        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                // 2
+                currentTimeTextView.text =
+                    DateUtils.formatElapsedTime((progress / 1000).toLong())
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar) {
+                // 3
+                draggingScrubber = true
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar) {
+                // 4
+                draggingScrubber = false
+                // 5
+                val fragmentActivity = activity as FragmentActivity
+                val controller = MediaControllerCompat.getMediaController(fragmentActivity)
+                if (controller.playbackState != null) {
+                    // 6
+                    controller.transportControls.seekTo(seekBar.progress.toLong())
+                } else {
+                    // 7
+                    seekBar.progress = 0
+                }
+            }
+        })
     }
 
     private fun handleStateChange(state: Int) {
@@ -216,7 +251,8 @@ class EpisodePlayerFragment : Fragment() {
         val controller = MediaControllerCompat.getMediaController(fragmentActivity)
         controller.sendCommand(CMD_CHANGESPEED, bundle, null)
         // 4
-        speedButton.text = "${playerSpeed}x"
+        val speedButtonText = "${playerSpeed}x"
+        speedButton.text = speedButtonText
     }
 
     private fun seekBy(seconds: Int) {
@@ -224,5 +260,11 @@ class EpisodePlayerFragment : Fragment() {
         val controller = MediaControllerCompat.getMediaController(fragmentActivity)
         val newPosition = controller.playbackState.position + seconds*1000
         controller.transportControls.seekTo(newPosition)
+    }
+
+    private fun updateControlsFromMetadata(metadata: MediaMetadataCompat) {
+        episodeDuration = metadata.getLong(MediaMetadataCompat.METADATA_KEY_DURATION)
+        endTimeTextView.text = DateUtils.formatElapsedTime(episodeDuration / 1000)
+        seekBar.max = episodeDuration.toInt()
     }
 }
