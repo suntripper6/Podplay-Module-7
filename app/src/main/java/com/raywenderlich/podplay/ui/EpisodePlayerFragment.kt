@@ -1,5 +1,6 @@
 package com.raywenderlich.podplay.ui
 
+import android.animation.ValueAnimator
 import android.content.ComponentName
 import android.media.session.PlaybackState
 import android.net.Uri
@@ -15,6 +16,7 @@ import android.text.method.ScrollingMovementMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
 import android.widget.SeekBar
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
@@ -30,6 +32,7 @@ import kotlinx.android.synthetic.main.fragment_episode_player.*
 
 class EpisodePlayerFragment : Fragment() {
 
+    private var progressAnimator: ValueAnimator? = null
     private var draggingScrubber: Boolean = false
     private var episodeDuration: Long = 0
     private var playerSpeed: Float = 1.0f
@@ -56,7 +59,7 @@ class EpisodePlayerFragment : Fragment() {
             super.onPlaybackStateChanged(state)
             println("state changed to $state")
             val state = state ?: return
-            handleStateChange(state.state)  // maybe state.getState()
+            handleStateChange(state.state, state.position, state.playbackSpeed)
         }
     }
     inner class MediaBrowserCallBacks: MediaBrowserCompat.ConnectionCallback() {
@@ -65,6 +68,7 @@ class EpisodePlayerFragment : Fragment() {
             // 2
             registerMediaController(mediaBrowser.sessionToken)
             println("onConnected")
+            updateControlsFromContoller()
         }
 
         override fun onConnectionSuspended() {
@@ -104,6 +108,7 @@ class EpisodePlayerFragment : Fragment() {
             if (MediaControllerCompat.getMediaController(fragmentActivity) == null) {
                 registerMediaController(mediaBrowser.sessionToken)
             }
+            updateControlsFromContoller()
         } else {
             mediaBrowser.connect()
         }
@@ -111,6 +116,7 @@ class EpisodePlayerFragment : Fragment() {
 
     override fun onStop() {
         super.onStop()
+        progressAnimator?.cancel()
         val fragmentActivity = activity as FragmentActivity
         if (MediaControllerCompat.getMediaController(fragmentActivity) != null) {
             mediaControllerCallback?.let {
@@ -134,6 +140,21 @@ class EpisodePlayerFragment : Fragment() {
         Glide.with(fragmentActivity)
             .load(podcastViewModel.activePodcastViewData?.imageUrl)
             .into(episodeImageView)
+    }
+
+    // Device orientation
+    private fun updateControlsFromContoller() {
+        val fragmentActivity = activity as FragmentActivity
+        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
+
+        if (controller != null) {
+            val metadata = controller.metadata
+            if (metadata != null) {
+                handleStateChange(controller.playbackState.state,
+                    controller.playbackState.position, playerSpeed)
+                updateControlsFromMetadata(controller.metadata)
+            }
+        }
     }
 
     private fun startPlaying(episodeViewData: PodcastViewModel.EpisodeViewData) {
@@ -232,9 +253,25 @@ class EpisodePlayerFragment : Fragment() {
         })
     }
 
-    private fun handleStateChange(state: Int) {
+    private fun handleStateChange(state: Int, position: Long, speed: Float) {
+
+        progressAnimator?.let {
+            it.cancel()
+            progressAnimator = null
+        }
+
         val isPlaying = state == PlaybackState.STATE_PLAYING
         playToggleButton.isActivated = isPlaying
+
+        val progress = position.toInt()
+        seekBar.progress = progress
+        val speedButtonText = "${playerSpeed}x"
+        speedButton.text = speedButtonText
+
+        if (isPlaying) {
+            animateScrubber(progress, speed)
+        }
+
     }
 
     private fun changeSpeed() {
@@ -266,5 +303,35 @@ class EpisodePlayerFragment : Fragment() {
         episodeDuration = metadata.getLong(MediaMetadataCompat.METADATA_KEY_DURATION)
         endTimeTextView.text = DateUtils.formatElapsedTime(episodeDuration / 1000)
         seekBar.max = episodeDuration.toInt()
+    }
+
+    // 1
+    private fun animateScrubber(progress: Int, speed: Float) {
+        // 2
+        val timeRemaining = ((episodeDuration - progress) / speed).toInt()
+        // 3
+        if (timeRemaining < 0) {
+            return
+        }
+        // 4
+        progressAnimator = ValueAnimator.ofInt(progress, episodeDuration.toInt())
+        progressAnimator?.let { animator ->
+            // 5
+            animator.duration = timeRemaining.toLong()
+            // 6
+            animator.interpolator = LinearInterpolator()
+            // 7
+            animator.addUpdateListener {
+                if (draggingScrubber) {
+                    // 8
+                    animator.cancel()
+                } else {
+                    // 9
+                    seekBar.progress = animator.animatedValue as Int
+                }
+            }
+            // 10
+            animator.start()
+        }
     }
 }
