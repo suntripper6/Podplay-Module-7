@@ -8,9 +8,11 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.ResultReceiver
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import java.lang.Exception
 
 interface PodplayMediaListener {
     fun onStateChanged()
@@ -74,11 +76,46 @@ class PodplayMediaCallback(
     }
 
     // Helper method for state of media session
-    private fun setState(state: Int) {
+    private fun setState(state: Int, newSpeed: Float? = null) {
         var position: Long = -1
 
         mediaPlayer?.let {
             position = it.currentPosition.toLong()
+        }
+
+        // 1
+        var speed = 1.0f
+        // 2
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (newSpeed == null) {
+                // 3
+                speed = mediaPlayer?.playbackParams?.speed ?: 1.0f
+            } else {
+                // 4
+                speed = newSpeed
+            }
+            mediaPlayer?.let { mediaPlayer ->
+                // 5
+                try {
+                    mediaPlayer.playbackParams = mediaPlayer.playbackParams.setSpeed(speed)
+                }
+                catch (e: Exception) {
+                    // 6
+                    mediaPlayer.reset()
+                    mediaUri?.let { mediaUri ->
+                        mediaPlayer.setDataSource(context, mediaUri)
+                    }
+                    mediaPlayer.prepare()
+                    // 7
+                    mediaPlayer.playbackParams = mediaPlayer.playbackParams.setSpeed(speed)
+                    // 8
+                    mediaPlayer.seekTo(position.toInt())
+                    // 9
+                    if (state == PlaybackStateCompat.STATE_PLAYING) {
+                        mediaPlayer.start()
+                    }
+                }
+            }
         }
 
         val playbackState = PlaybackStateCompat.Builder().setActions(
@@ -87,14 +124,31 @@ class PodplayMediaCallback(
                     PlaybackStateCompat.ACTION_PLAY_PAUSE or
                     PlaybackStateCompat.ACTION_PAUSE
         )
-            .setState(state, position, 1.0f)
+            .setState(state, position, speed)
             .build()
 
         mediaSession.setPlaybackState(playbackState)
 
         if (state == PlaybackStateCompat.STATE_PAUSED ||
-            state == PlaybackStateCompat.STATE_PLAYING) {
+            state == PlaybackStateCompat.STATE_PLAYING
+        ) {
             listener?.onStateChanged()
+        }
+    }
+
+    private fun changeSpeed(extras: Bundle) {
+        var playbackState = PlaybackStateCompat.STATE_PAUSED
+
+        if (mediaSession.controller.playbackState != null) {
+            playbackState = mediaSession.controller.playbackState.state
+        }
+        setState(playbackState, extras.getFloat(CMD_EXTRA_SPEED))
+    }
+
+    override fun onCommand(command: String?, extras: Bundle?, cb: ResultReceiver?) {
+        super.onCommand(command, extras, cb)
+        when (command) {
+            CMD_CHANGESPEED -> extras?.let { changeSpeed(it) }
         }
     }
 
@@ -165,17 +219,28 @@ class PodplayMediaCallback(
                     mediaPlayer.setDataSource(context, mediaUri)
                     mediaPlayer.prepare()
                     mediaExtras?.let { mediaExtras ->
-                        mediaSession.setMetadata(MediaMetadataCompat.Builder()
-                            .putString(MediaMetadataCompat.METADATA_KEY_TITLE,
-                                mediaExtras.getString(
-                                    MediaMetadataCompat.METADATA_KEY_TITLE))
-                            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST,
-                                mediaExtras.getString(
-                                    MediaMetadataCompat.METADATA_KEY_ARTIST))
-                            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI,
-                                mediaExtras.getString(
-                                    MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI))
-                            .build())
+                        mediaSession.setMetadata(
+                            MediaMetadataCompat.Builder()
+                                .putString(
+                                    MediaMetadataCompat.METADATA_KEY_TITLE,
+                                    mediaExtras.getString(
+                                        MediaMetadataCompat.METADATA_KEY_TITLE
+                                    )
+                                )
+                                .putString(
+                                    MediaMetadataCompat.METADATA_KEY_ARTIST,
+                                    mediaExtras.getString(
+                                        MediaMetadataCompat.METADATA_KEY_ARTIST
+                                    )
+                                )
+                                .putString(
+                                    MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI,
+                                    mediaExtras.getString(
+                                        MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI
+                                    )
+                                )
+                                .build()
+                        )
                     }
                 }
             }
@@ -210,5 +275,10 @@ class PodplayMediaCallback(
                 setState(PlaybackStateCompat.STATE_STOPPED)
             }
         }
+    }
+
+    companion object {
+        const val CMD_CHANGESPEED = "change_speed"
+        const val CMD_EXTRA_SPEED = "speed"
     }
 }

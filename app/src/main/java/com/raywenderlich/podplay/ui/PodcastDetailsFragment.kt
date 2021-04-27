@@ -30,8 +30,7 @@ import java.lang.RuntimeException
 
 // Displays podcast details
 class PodcastDetailsFragment : Fragment(), EpisodeListAdapterListener {
-    private lateinit var mediaBrowser: MediaBrowserCompat
-    private var mediaControllerCallback: MediaControllerCallback? = null
+
     private var menuItem: MenuItem? = null
     private var listener: OnPodcastDetailsListener? = null
     private lateinit var episodeListAdapter: EpisodeListAdapter
@@ -41,7 +40,6 @@ class PodcastDetailsFragment : Fragment(), EpisodeListAdapterListener {
         super.onCreate(savedInstanceState)
         // 1
         setHasOptionsMenu(true)
-        initMediaBrowser()
     }
 
     override fun onCreateView(
@@ -135,86 +133,12 @@ class PodcastDetailsFragment : Fragment(), EpisodeListAdapterListener {
         }
     }
 
-    // For media browser stuff - callback
-    inner class MediaControllerCallback : MediaControllerCompat.Callback() {
-        override fun onMetadataChanged(metadata: MediaMetadataCompat?) {
-            super.onMetadataChanged(metadata)
-            println("metadata changed to ${metadata?.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_URI)}")
-        }
-
-        override fun onPlaybackStateChanged(state: PlaybackStateCompat?) {
-            super.onPlaybackStateChanged(state)
-            println("state changed to $state")
-        }
-    }
-    inner class MediaBrowserCallBacks: MediaBrowserCompat.ConnectionCallback() {
-        override fun onConnected() {
-            super.onConnected()
-            // 2
-            registerMediaController(mediaBrowser.sessionToken)
-            println("onConnected")
-        }
-
-        override fun onConnectionSuspended() {
-            super.onConnectionSuspended()
-            println("onConnectionSuspended")
-            // Disable transport controls
-        }
-
-        override fun onConnectionFailed() {
-            super.onConnectionFailed()
-            println("onConnectionFailed")
-            // Fata error handling
-        }
-    }
-    private fun registerMediaController(token: MediaSessionCompat.Token) {
-        // 1
-        val fragmentActivity = activity as FragmentActivity
-        // 2
-        val mediaController = MediaControllerCompat(fragmentActivity, token)
-        // 3
-        MediaControllerCompat.setMediaController(fragmentActivity, mediaController)
-        // 4
-        mediaControllerCallback = MediaControllerCallback()
-        mediaController.registerCallback(mediaControllerCallback!!)
-    }
-    private fun initMediaBrowser() {
-        val fragmentActivity = activity as FragmentActivity
-        mediaBrowser = MediaBrowserCompat(fragmentActivity,
-            ComponentName(fragmentActivity, PodplayMediaService::class.java),
-            MediaBrowserCallBacks(), null)
-    }
     override fun onStart() {
         super.onStart()
-        if (mediaBrowser.isConnected) {
-            val fragmentActivity = activity as FragmentActivity
-            if (MediaControllerCompat.getMediaController(fragmentActivity) == null) {
-                registerMediaController(mediaBrowser.sessionToken)
-            }
-        } else {
-            mediaBrowser.connect()
-        }
+
     }
     override fun onStop() {
         super.onStop()
-        val fragmentActivity = activity as FragmentActivity
-        if (MediaControllerCompat.getMediaController(fragmentActivity) != null) {
-            mediaControllerCallback?.let {
-                MediaControllerCompat.getMediaController(fragmentActivity).unregisterCallback(it)
-            }
-        }
-    }
-    private fun startPlaying(episodeViewData: EpisodeViewData) {
-        val fragmentActivity = activity as FragmentActivity
-        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
-        //controller.transportControls.playFromUri(Uri.parse(episodeViewData.mediaUrl), null)
-        val viewData = podcastViewModel.activePodcastViewData ?: return
-        val bundle = Bundle()
-        bundle.putString(MediaMetadataCompat.METADATA_KEY_TITLE, episodeViewData.title)
-        bundle.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, viewData.feeTitle)
-        bundle.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, viewData.imageUrl)
-
-        controller.transportControls.playFromUri(Uri.parse(episodeViewData.mediaUrl), bundle)
     }
 
     override fun onSelectedEpisode(episodeViewData: EpisodeViewData) {
