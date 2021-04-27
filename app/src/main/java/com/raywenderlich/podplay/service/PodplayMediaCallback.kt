@@ -130,8 +130,7 @@ class PodplayMediaCallback(
         mediaSession.setPlaybackState(playbackState)
 
         if (state == PlaybackStateCompat.STATE_PAUSED ||
-            state == PlaybackStateCompat.STATE_PLAYING
-        ) {
+            state == PlaybackStateCompat.STATE_PLAYING) {
             listener?.onStateChanged()
         }
     }
