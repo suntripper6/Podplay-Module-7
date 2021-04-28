@@ -25,6 +25,7 @@ class PodplayMediaCallback(
     var mediaPlayer: MediaPlayer? = null
 ) : MediaSessionCompat.Callback() {
 
+    private var mediaNeedsPrepare: Boolean = false
     var listener: PodplayMediaListener? = null
     private var mediaUri: Uri? = null
     private var newMedia: Boolean = false
@@ -205,6 +206,7 @@ class PodplayMediaCallback(
             mediaPlayer!!.setOnCompletionListener {
                 setState(PlaybackStateCompat.STATE_PAUSED)
             }
+            mediaNeedsPrepare = true
         }
     }
 
@@ -213,9 +215,11 @@ class PodplayMediaCallback(
             newMedia = false
             mediaPlayer?.let { mediaPlayer ->
                 mediaUri?.let { mediaUri ->
-                    mediaPlayer.reset()
-                    mediaPlayer.setDataSource(context, mediaUri)
-                    mediaPlayer.prepare()
+                    if (mediaNeedsPrepare) {
+                        mediaPlayer.reset()
+                        mediaPlayer.setDataSource(context, mediaUri)
+                        mediaPlayer.prepare()
+                    }
                     mediaExtras?.let { mediaExtras ->
                         mediaSession.setMetadata(
                             MediaMetadataCompat.Builder()

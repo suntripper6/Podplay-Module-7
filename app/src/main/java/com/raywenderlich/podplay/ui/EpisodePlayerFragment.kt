@@ -2,6 +2,10 @@ package com.raywenderlich.podplay.ui
 
 import android.animation.ValueAnimator
 import android.content.ComponentName
+import android.content.Context
+import android.graphics.Color
+import android.media.AudioManager
+import android.media.MediaPlayer
 import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Build
@@ -14,15 +18,18 @@ import android.support.v4.media.session.PlaybackStateCompat
 import android.text.format.DateUtils
 import android.text.method.ScrollingMovementMethod
 import android.view.LayoutInflater
+import android.view.SurfaceHolder
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
 import android.widget.SeekBar
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.activityViewModels
 import com.bumptech.glide.Glide
 import com.raywenderlich.podplay.R
+import com.raywenderlich.podplay.service.PodplayMediaCallback
 import com.raywenderlich.podplay.service.PodplayMediaCallback.Companion.CMD_CHANGESPEED
 import com.raywenderlich.podplay.service.PodplayMediaCallback.Companion.CMD_EXTRA_SPEED
 import com.raywenderlich.podplay.service.PodplayMediaService
@@ -32,6 +39,10 @@ import kotlinx.android.synthetic.main.fragment_episode_player.*
 
 class EpisodePlayerFragment : Fragment() {
 
+    private var isVideo: Boolean = false
+    private var mediaPlayer: MediaPlayer? = null
+    private var playOnPrepare: Boolean = false
+    private var mediaSession: MediaSessionCompat? = null
     private var progressAnimator: ValueAnimator? = null
     private var draggingScrubber: Boolean = false
     private var episodeDuration: Long = 0
@@ -87,7 +98,15 @@ class EpisodePlayerFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         retainInstance = true
-        initMediaBrowser()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            isVideo = podcastViewModel.activeEpisodeViewData?.isVideo ?: false
+        } else {
+            isVideo = false
+        }
+        if (!isVideo) {
+            initMediaBrowser()
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
@@ -98,19 +117,27 @@ class EpisodePlayerFragment : Fragment() {
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
         setupControls()
+
+        if (isVideo) {
+            initMediaSession()
+            initVideoPlayer()
+        }
+
         updateControls()
     }
 
     override fun onStart() {
         super.onStart()
-        if (mediaBrowser.isConnected) {
-            val fragmentActivity = activity as FragmentActivity
-            if (MediaControllerCompat.getMediaController(fragmentActivity) == null) {
-                registerMediaController(mediaBrowser.sessionToken)
+        if (isVideo) {
+            if (mediaBrowser.isConnected) {
+                val fragmentActivity = activity as FragmentActivity
+                if (MediaControllerCompat.getMediaController(fragmentActivity) == null) {
+                    registerMediaController(mediaBrowser.sessionToken)
+                }
+                updateControlsFromContoller()
+            } else {
+                mediaBrowser.connect()
             }
-            updateControlsFromContoller()
-        } else {
-            mediaBrowser.connect()
         }
     }
 
@@ -122,6 +149,13 @@ class EpisodePlayerFragment : Fragment() {
             mediaControllerCallback?.let {
                 MediaControllerCompat.getMediaController(fragmentActivity).unregisterCallback(it)
             }
+        }
+        if (isVideo) {
+            mediaPlayer?.setDisplay(null)
+        }
+        if (!fragmentActivity.isChangingConfigurations) {
+            mediaPlayer?.release()
+            mediaPlayer = null
         }
     }
 
@@ -140,6 +174,10 @@ class EpisodePlayerFragment : Fragment() {
         Glide.with(fragmentActivity)
             .load(podcastViewModel.activePodcastViewData?.imageUrl)
             .into(episodeImageView)
+
+        mediaPlayer?.let {
+            updateControlsFromContoller()
+        }
     }
 
     // Device orientation
@@ -190,6 +228,7 @@ class EpisodePlayerFragment : Fragment() {
     }
 
     private fun togglePlayPause() {
+        playOnPrepare = true
         val fragmentActivity = activity as FragmentActivity
         val controller = MediaControllerCompat.getMediaController(fragmentActivity)
 
@@ -269,6 +308,9 @@ class EpisodePlayerFragment : Fragment() {
         speedButton.text = speedButtonText
 
         if (isPlaying) {
+            if (isVideo) {
+                setupVideoUI()
+            }
             animateScrubber(progress, speed)
         }
 
@@ -333,5 +375,98 @@ class EpisodePlayerFragment : Fragment() {
             // 10
             animator.start()
         }
+    }
+
+    private fun initMediaSession() {
+        if (mediaSession == null) {
+            // 1
+            mediaSession = MediaSessionCompat(activity as Context, "EpisodePlayerFragment")
+            // 2
+            mediaSession?.setMediaButtonReceiver(null)
+        }
+        registerMediaController(mediaSession!!.sessionToken)
+    }
+    // Video
+    private fun setSurfaceSize() {
+        // 1
+        val mediaPlayer = mediaPlayer ?: return
+        // 2
+        val videoWidth = mediaPlayer.videoWidth
+        val videoHeight = mediaPlayer.videoHeight
+        // 3
+        val parent = videoSurfaceView.parent as View
+        val containerWidth = parent.width
+        val containerHeight = parent.height
+        // 4
+        val layoutAspectRatio = containerWidth.toFloat() / containerHeight
+        val videoAspectRatio = videoWidth.toFloat() / videoHeight
+        // 5
+        val layoutParams = videoSurfaceView.layoutParams
+        // 6
+        if (videoAspectRatio > layoutAspectRatio) {
+            layoutParams.height = (containerWidth / videoAspectRatio).toInt()
+        } else {
+            layoutParams.width = (containerHeight * videoAspectRatio).toInt()
+        }
+        // 7
+        videoSurfaceView.layoutParams = layoutParams
+    }
+    private fun initMediaPlayer() {
+        if (mediaPlayer == null) {
+            // 1
+            mediaPlayer = MediaPlayer()
+            mediaPlayer?.let {
+                // 2
+                it.setAudioStreamType(AudioManager.STREAM_MUSIC)
+                // 3
+                it.setDataSource(podcastViewModel.activeEpisodeViewData?.mediaUrl)
+                // 4
+                it.setOnPreparedListener {
+                    // 5
+                    val fragmentActivity = activity as FragmentActivity
+                    val episodeMediaCallBack = PodplayMediaCallback(
+                        fragmentActivity, mediaSession!!, it)
+                    mediaSession!!.setCallback(episodeMediaCallBack)
+                    // 6
+                    setSurfaceSize()
+                    // 7
+                    if (playOnPrepare) {
+                        togglePlayPause()
+                    }
+                }
+                // 8
+                it.prepareAsync()
+            }
+        } else {
+            // 9
+            setSurfaceSize()
+        }
+    }
+    private fun initVideoPlayer() {
+        // 1
+        videoSurfaceView.visibility = View.VISIBLE
+        // 2
+        val surfaceHolder = videoSurfaceView.holder
+        // 3
+        surfaceHolder.addCallback(object: SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                // 4
+                initMediaPlayer()
+                mediaPlayer?.setDisplay(holder)
+            }
+            override fun surfaceChanged(var1: SurfaceHolder, var2: Int, var3: Int, var4: Int) {
+
+            }
+            override fun surfaceDestroyed(var1: SurfaceHolder) {
+
+            }
+        })
+    }
+    private fun setupVideoUI() {
+        episodeDescTextView.visibility = View.INVISIBLE
+        headerView.visibility = View.INVISIBLE
+        val activity = activity as AppCompatActivity
+        activity.supportActionBar?.hide()
+        playerControls.setBackgroundColor(Color.argb(255/2, 0, 0, 0))
     }
 }
