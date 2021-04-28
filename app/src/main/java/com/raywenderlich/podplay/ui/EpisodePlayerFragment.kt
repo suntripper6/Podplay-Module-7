@@ -4,7 +4,7 @@ import android.animation.ValueAnimator
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Color
-import android.media.AudioManager
+import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.session.PlaybackState
 import android.net.Uri
@@ -57,48 +57,9 @@ class EpisodePlayerFragment : Fragment() {
         }
     }
 
-    // For media browser stuff - callback
-    inner class MediaControllerCallback : MediaControllerCompat.Callback() {
-        override fun onMetadataChanged(metadata: MediaMetadataCompat?) {
-            super.onMetadataChanged(metadata)
-            println("metadata changed to ${metadata?.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_URI)}")
-
-            metadata?.let { updateControlsFromMetadata(it) }
-        }
-
-        override fun onPlaybackStateChanged(state: PlaybackStateCompat?) {
-            super.onPlaybackStateChanged(state)
-            println("state changed to $state")
-            val state = state ?: return
-            handleStateChange(state.state, state.position, state.playbackSpeed)
-        }
-    }
-    inner class MediaBrowserCallBacks: MediaBrowserCompat.ConnectionCallback() {
-        override fun onConnected() {
-            super.onConnected()
-            // 2
-            registerMediaController(mediaBrowser.sessionToken)
-            println("onConnected")
-            updateControlsFromContoller()
-        }
-
-        override fun onConnectionSuspended() {
-            super.onConnectionSuspended()
-            println("onConnectionSuspended")
-            // Disable transport controls
-        }
-
-        override fun onConnectionFailed() {
-            super.onConnectionFailed()
-            println("onConnectionFailed")
-            // Fata error handling
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         retainInstance = true
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             isVideo = podcastViewModel.activeEpisodeViewData?.isVideo ?: false
         } else {
@@ -109,8 +70,10 @@ class EpisodePlayerFragment : Fragment() {
         }
     }
 
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
-                              savedInstanceState: Bundle?): View? {
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
         return inflater.inflate(R.layout.fragment_episode_player, container, false)
     }
 
@@ -122,19 +85,28 @@ class EpisodePlayerFragment : Fragment() {
             initMediaSession()
             initVideoPlayer()
         }
-
         updateControls()
     }
 
+//    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+//        super.onViewCreated(view, savedInstanceState)
+//        setupControls()
+//        if (isVideo) {
+//            initMediaSession()
+//            initVideoPlayer()
+//        }
+//        updateControls()
+//    }
+
     override fun onStart() {
         super.onStart()
-        if (isVideo) {
+        if (!isVideo) {
             if (mediaBrowser.isConnected) {
                 val fragmentActivity = activity as FragmentActivity
                 if (MediaControllerCompat.getMediaController(fragmentActivity) == null) {
                     registerMediaController(mediaBrowser.sessionToken)
                 }
-                updateControlsFromContoller()
+                updateControlsFromController()
             } else {
                 mediaBrowser.connect()
             }
@@ -157,88 +129,6 @@ class EpisodePlayerFragment : Fragment() {
             mediaPlayer?.release()
             mediaPlayer = null
         }
-    }
-
-    private fun updateControls() {
-        // 1
-        episodeTitleTextView.text = podcastViewModel.activeEpisodeViewData?.title
-
-        // 2
-        val htmlDesc = podcastViewModel.activeEpisodeViewData?.description ?: ""
-        val descSpan = HtmlUtils.htmlToSpannable(htmlDesc)
-        episodeDescTextView.text = descSpan
-        episodeDescTextView.movementMethod = ScrollingMovementMethod()
-
-        // 3
-        val fragmentActivity = activity as FragmentActivity
-        Glide.with(fragmentActivity)
-            .load(podcastViewModel.activePodcastViewData?.imageUrl)
-            .into(episodeImageView)
-
-        mediaPlayer?.let {
-            updateControlsFromContoller()
-        }
-    }
-
-    // Device orientation
-    private fun updateControlsFromContoller() {
-        val fragmentActivity = activity as FragmentActivity
-        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
-
-        if (controller != null) {
-            val metadata = controller.metadata
-            if (metadata != null) {
-                handleStateChange(controller.playbackState.state,
-                    controller.playbackState.position, playerSpeed)
-                updateControlsFromMetadata(controller.metadata)
-            }
-        }
-    }
-
-    private fun startPlaying(episodeViewData: PodcastViewModel.EpisodeViewData) {
-        val fragmentActivity = activity as FragmentActivity
-        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
-        //controller.transportControls.playFromUri(Uri.parse(episodeViewData.mediaUrl), null)
-        val viewData = podcastViewModel.activePodcastViewData ?: return
-        val bundle = Bundle()
-        bundle.putString(MediaMetadataCompat.METADATA_KEY_TITLE, episodeViewData.title)
-        bundle.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, viewData.feeTitle)
-        bundle.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, viewData.imageUrl)
-
-        controller.transportControls.playFromUri(Uri.parse(episodeViewData.mediaUrl), bundle)
-    }
-
-    private fun initMediaBrowser() {
-        val fragmentActivity = activity as FragmentActivity
-        mediaBrowser = MediaBrowserCompat(fragmentActivity,
-            ComponentName(fragmentActivity, PodplayMediaService::class.java),
-            MediaBrowserCallBacks(), null)
-    }
-
-    private fun registerMediaController(token: MediaSessionCompat.Token) {
-        // 1
-        val fragmentActivity = activity as FragmentActivity
-        // 2
-        val mediaController = MediaControllerCompat(fragmentActivity, token)
-        // 3
-        MediaControllerCompat.setMediaController(fragmentActivity, mediaController)
-        // 4
-        mediaControllerCallback = MediaControllerCallback()
-        mediaController.registerCallback(mediaControllerCallback!!)
-    }
-
-    private fun togglePlayPause() {
-        playOnPrepare = true
-        val fragmentActivity = activity as FragmentActivity
-        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
-
-        if (controller.playbackState != null) {
-            if (controller.playbackState.state == PlaybackStateCompat.STATE_PLAYING) {
-                controller.transportControls.pause()
-            } else {
-                podcastViewModel.activeEpisodeViewData?.let { startPlaying(it) }
-            }
-        } else podcastViewModel.activeEpisodeViewData?.let { startPlaying(it) }
     }
 
     private fun setupControls() {
@@ -292,59 +182,125 @@ class EpisodePlayerFragment : Fragment() {
         })
     }
 
-    private fun handleStateChange(state: Int, position: Long, speed: Float) {
+    private fun setupVideoUI() {
+        episodeDescTextView.visibility = View.INVISIBLE
+        headerView.visibility = View.INVISIBLE
+        val activity = activity as AppCompatActivity
+        activity.supportActionBar?.hide()
+        playerControls.setBackgroundColor(Color.argb(255 / 2, 0, 0, 0))
+    }
 
-        progressAnimator?.let {
-            it.cancel()
-            progressAnimator = null
-        }
+    // Device orientation
+    private fun updateControlsFromController() {
+        val fragmentActivity = activity as FragmentActivity
+        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
 
-        val isPlaying = state == PlaybackState.STATE_PLAYING
-        playToggleButton.isActivated = isPlaying
-
-        val progress = position.toInt()
-        seekBar.progress = progress
-        val speedButtonText = "${playerSpeed}x"
-        speedButton.text = speedButtonText
-
-        if (isPlaying) {
-            if (isVideo) {
-                setupVideoUI()
+        if (controller != null) {
+            val metadata = controller.metadata
+            if (metadata != null) {
+                handleStateChange(
+                    controller.playbackState.state,
+                    controller.playbackState.position, playerSpeed
+                )
+                updateControlsFromMetadata(controller.metadata)
             }
-            animateScrubber(progress, speed)
         }
-
     }
 
-    private fun changeSpeed() {
+    private fun initVideoPlayer() {
         // 1
-        playerSpeed += 0.25f
-        if (playerSpeed > 2.0f) {
-            playerSpeed = 0.75f
-        }
+        videoSurfaceView.visibility = View.VISIBLE
         // 2
-        val bundle = Bundle()
-        bundle.putFloat(CMD_EXTRA_SPEED, playerSpeed)
+        val surfaceHolder = videoSurfaceView.holder
         // 3
-        val fragmentActivity = activity as FragmentActivity
-        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
-        controller.sendCommand(CMD_CHANGESPEED, bundle, null)
+        surfaceHolder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                // 4
+                initMediaPlayer()
+                mediaPlayer?.setDisplay(holder)
+            }
+
+            override fun surfaceChanged(var1: SurfaceHolder, var2: Int, var3: Int, var4: Int) {
+            }
+
+            override fun surfaceDestroyed(var1: SurfaceHolder) {
+            }
+        })
+    }
+
+    private fun initMediaPlayer() {
+        if (mediaPlayer == null) {
+            // 1
+            mediaPlayer = MediaPlayer()
+            mediaPlayer?.let { mediaPlayer ->
+                // 2
+                mediaPlayer.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                // 3
+                mediaPlayer.setDataSource(podcastViewModel.activeEpisodeViewData?.mediaUrl)
+                // 4
+                mediaPlayer.setOnPreparedListener {
+                    // 5
+                    val fragmentActivity = activity as FragmentActivity
+                    mediaSession?.let { mediaSession ->
+                        val episodeMediaCallback =
+                            PodplayMediaCallback(fragmentActivity, mediaSession, it)
+                        mediaSession.setCallback(episodeMediaCallback)
+                    }
+                    // 6
+                    setSurfaceSize()
+                    // 7
+                    if (playOnPrepare) {
+                        togglePlayPause()
+                    }
+                }
+                // 8
+                mediaPlayer.prepareAsync()
+            }
+        } else {
+            // 9
+            setSurfaceSize()
+        }
+    }
+
+    private fun initMediaSession() {
+        if (mediaSession == null) {
+            // 1
+            mediaSession = MediaSessionCompat(activity as Context, "EpisodePlayerFragment")
+            // 2
+            mediaSession?.setMediaButtonReceiver(null)
+        }
+        registerMediaController(mediaSession!!.sessionToken)
+    }
+
+    // Video
+    private fun setSurfaceSize() {
+        // 1
+        val mediaPlayer = mediaPlayer ?: return
+        // 2
+        val videoWidth = mediaPlayer.videoWidth
+        val videoHeight = mediaPlayer.videoHeight
+        // 3
+        val parent = videoSurfaceView.parent as View
+        val containerWidth = parent.width
+        val containerHeight = parent.height
         // 4
-        val speedButtonText = "${playerSpeed}x"
-        speedButton.text = speedButtonText
-    }
-
-    private fun seekBy(seconds: Int) {
-        val fragmentActivity = activity as FragmentActivity
-        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
-        val newPosition = controller.playbackState.position + seconds*1000
-        controller.transportControls.seekTo(newPosition)
-    }
-
-    private fun updateControlsFromMetadata(metadata: MediaMetadataCompat) {
-        episodeDuration = metadata.getLong(MediaMetadataCompat.METADATA_KEY_DURATION)
-        endTimeTextView.text = DateUtils.formatElapsedTime(episodeDuration / 1000)
-        seekBar.max = episodeDuration.toInt()
+        val layoutAspectRatio = containerWidth.toFloat() / containerHeight
+        val videoAspectRatio = videoWidth.toFloat() / videoHeight
+        // 5
+        val layoutParams = videoSurfaceView.layoutParams
+        // 6
+        if (videoAspectRatio > layoutAspectRatio) {
+            layoutParams.height = (containerWidth / videoAspectRatio).toInt()
+        } else {
+            layoutParams.width = (containerHeight * videoAspectRatio).toInt()
+        }
+        // 7
+        videoSurfaceView.layoutParams = layoutParams
     }
 
     // 1
@@ -377,96 +333,168 @@ class EpisodePlayerFragment : Fragment() {
         }
     }
 
-    private fun initMediaSession() {
-        if (mediaSession == null) {
-            // 1
-            mediaSession = MediaSessionCompat(activity as Context, "EpisodePlayerFragment")
-            // 2
-            mediaSession?.setMediaButtonReceiver(null)
-        }
-        registerMediaController(mediaSession!!.sessionToken)
+    private fun updateControlsFromMetadata(metadata: MediaMetadataCompat) {
+        episodeDuration = metadata.getLong(MediaMetadataCompat.METADATA_KEY_DURATION)
+        endTimeTextView.text = DateUtils.formatElapsedTime(episodeDuration / 1000)
+        seekBar.max = episodeDuration.toInt()
     }
-    // Video
-    private fun setSurfaceSize() {
+
+    private fun changeSpeed() {
         // 1
-        val mediaPlayer = mediaPlayer ?: return
+        playerSpeed += 0.25f
+        if (playerSpeed > 2.0f) {
+            playerSpeed = 0.75f
+        }
         // 2
-        val videoWidth = mediaPlayer.videoWidth
-        val videoHeight = mediaPlayer.videoHeight
+        val bundle = Bundle()
+        bundle.putFloat(CMD_EXTRA_SPEED, playerSpeed)
         // 3
-        val parent = videoSurfaceView.parent as View
-        val containerWidth = parent.width
-        val containerHeight = parent.height
+        val fragmentActivity = activity as FragmentActivity
+        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
+        controller.sendCommand(CMD_CHANGESPEED, bundle, null)
         // 4
-        val layoutAspectRatio = containerWidth.toFloat() / containerHeight
-        val videoAspectRatio = videoWidth.toFloat() / videoHeight
-        // 5
-        val layoutParams = videoSurfaceView.layoutParams
-        // 6
-        if (videoAspectRatio > layoutAspectRatio) {
-            layoutParams.height = (containerWidth / videoAspectRatio).toInt()
-        } else {
-            layoutParams.width = (containerHeight * videoAspectRatio).toInt()
-        }
-        // 7
-        videoSurfaceView.layoutParams = layoutParams
+        val speedButtonText = "${playerSpeed}x"
+        speedButton.text = speedButtonText
     }
-    private fun initMediaPlayer() {
-        if (mediaPlayer == null) {
-            // 1
-            mediaPlayer = MediaPlayer()
-            mediaPlayer?.let {
-                // 2
-                it.setAudioStreamType(AudioManager.STREAM_MUSIC)
-                // 3
-                it.setDataSource(podcastViewModel.activeEpisodeViewData?.mediaUrl)
-                // 4
-                it.setOnPreparedListener {
-                    // 5
-                    val fragmentActivity = activity as FragmentActivity
-                    val episodeMediaCallBack = PodplayMediaCallback(
-                        fragmentActivity, mediaSession!!, it)
-                    mediaSession!!.setCallback(episodeMediaCallBack)
-                    // 6
-                    setSurfaceSize()
-                    // 7
-                    if (playOnPrepare) {
-                        togglePlayPause()
-                    }
-                }
-                // 8
-                it.prepareAsync()
+
+    private fun seekBy(seconds: Int) {
+        val fragmentActivity = activity as FragmentActivity
+        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
+        val newPosition = controller.playbackState.position + seconds * 1000
+        controller.transportControls.seekTo(newPosition)
+    }
+
+    private fun handleStateChange(state: Int, position: Long, speed: Float) {
+
+        progressAnimator?.let {
+            it.cancel()
+            progressAnimator = null
+        }
+
+        val isPlaying = state == PlaybackState.STATE_PLAYING
+        playToggleButton.isActivated = isPlaying
+
+        val progress = position.toInt()
+        seekBar.progress = progress
+        val speedButtonText = "${playerSpeed}x"
+        speedButton.text = speedButtonText
+
+        if (isPlaying) {
+            if (isVideo) {
+                setupVideoUI()
             }
-        } else {
-            // 9
-            setSurfaceSize()
+            animateScrubber(progress, speed)
         }
     }
-    private fun initVideoPlayer() {
+
+    private fun updateControls() {
         // 1
-        videoSurfaceView.visibility = View.VISIBLE
+        episodeTitleTextView.text = podcastViewModel.activeEpisodeViewData?.title
+
         // 2
-        val surfaceHolder = videoSurfaceView.holder
+        val htmlDesc = podcastViewModel.activeEpisodeViewData?.description ?: ""
+        val descSpan = HtmlUtils.htmlToSpannable(htmlDesc)
+        episodeDescTextView.text = descSpan
+        episodeDescTextView.movementMethod = ScrollingMovementMethod()
+
         // 3
-        surfaceHolder.addCallback(object: SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                // 4
-                initMediaPlayer()
-                mediaPlayer?.setDisplay(holder)
-            }
-            override fun surfaceChanged(var1: SurfaceHolder, var2: Int, var3: Int, var4: Int) {
+        val fragmentActivity = activity as FragmentActivity
+        Glide.with(fragmentActivity)
+            .load(podcastViewModel.activePodcastViewData?.imageUrl)
+            .into(episodeImageView)
 
-            }
-            override fun surfaceDestroyed(var1: SurfaceHolder) {
+        val speedButtonText = "${playerSpeed}x"
+        speedButton.text = speedButtonText
 
-            }
-        })
+        mediaPlayer?.let {
+            updateControlsFromController()
+        }
     }
-    private fun setupVideoUI() {
-        episodeDescTextView.visibility = View.INVISIBLE
-        headerView.visibility = View.INVISIBLE
-        val activity = activity as AppCompatActivity
-        activity.supportActionBar?.hide()
-        playerControls.setBackgroundColor(Color.argb(255/2, 0, 0, 0))
+
+    private fun startPlaying(episodeViewData: PodcastViewModel.EpisodeViewData) {
+        val fragmentActivity = activity as FragmentActivity
+        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
+        //controller.transportControls.playFromUri(Uri.parse(episodeViewData.mediaUrl), null)
+        val viewData = podcastViewModel.activePodcastViewData ?: return
+        val bundle = Bundle()
+        bundle.putString(MediaMetadataCompat.METADATA_KEY_TITLE, episodeViewData.title)
+        bundle.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, viewData.feeTitle)
+        bundle.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, viewData.imageUrl)
+
+        controller.transportControls.playFromUri(Uri.parse(episodeViewData.mediaUrl), bundle)
+    }
+
+    private fun togglePlayPause() {
+        playOnPrepare = true
+        val fragmentActivity = activity as FragmentActivity
+        val controller = MediaControllerCompat.getMediaController(fragmentActivity)
+
+        if (controller.playbackState != null) {
+            if (controller.playbackState.state == PlaybackStateCompat.STATE_PLAYING) {
+                controller.transportControls.pause()
+            } else {
+                podcastViewModel.activeEpisodeViewData?.let { startPlaying(it) }
+            }
+        } else podcastViewModel.activeEpisodeViewData?.let { startPlaying(it) }
+    }
+
+    private fun registerMediaController(token: MediaSessionCompat.Token) {
+        // 1
+        val fragmentActivity = activity as FragmentActivity
+        // 2
+        val mediaController = MediaControllerCompat(fragmentActivity, token)
+        // 3
+        MediaControllerCompat.setMediaController(fragmentActivity, mediaController)
+        // 4
+        mediaControllerCallback = MediaControllerCallback()
+        mediaController.registerCallback(mediaControllerCallback!!)
+    }
+
+    private fun initMediaBrowser() {
+        val fragmentActivity = activity as FragmentActivity
+        mediaBrowser = MediaBrowserCompat(
+            fragmentActivity,
+            ComponentName(fragmentActivity, PodplayMediaService::class.java),
+            MediaBrowserCallBacks(), null
+        )
+    }
+
+    // For media browser stuff - callback
+    inner class MediaControllerCallback : MediaControllerCompat.Callback() {
+        override fun onMetadataChanged(metadata: MediaMetadataCompat?) {
+            super.onMetadataChanged(metadata)
+            println("metadata changed to ${metadata?.getString(MediaMetadataCompat.METADATA_KEY_MEDIA_URI)}")
+
+            metadata?.let { updateControlsFromMetadata(it) }
+        }
+
+        override fun onPlaybackStateChanged(state: PlaybackStateCompat?) {
+            super.onPlaybackStateChanged(state)
+            println("state changed to $state")
+            val state = state ?: return
+            handleStateChange(state.state, state.position, state.playbackSpeed)
+        }
+    }
+
+    inner class MediaBrowserCallBacks : MediaBrowserCompat.ConnectionCallback() {
+        override fun onConnected() {
+            super.onConnected()
+            // 2
+            registerMediaController(mediaBrowser.sessionToken)
+            println("onConnected")
+            updateControlsFromController()
+        }
+
+        override fun onConnectionSuspended() {
+            super.onConnectionSuspended()
+            println("onConnectionSuspended")
+            // Disable transport controls
+        }
+
+        override fun onConnectionFailed() {
+            super.onConnectionFailed()
+            println("onConnectionFailed")
+            // Fatal error handling
+        }
     }
 }

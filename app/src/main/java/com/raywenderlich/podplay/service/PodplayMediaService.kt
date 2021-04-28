@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
 import android.support.v4.media.MediaBrowserCompat
@@ -43,7 +42,7 @@ class PodplayMediaService : MediaBrowserServiceCompat(), PodplayMediaListener {
     }
 
     override fun onGetRoot(clientPackageName: String, clientUid: Int,
-                            rootHints: Bundle?): BrowserRoot? {
+                            rootHints: Bundle?): BrowserRoot {
 
         return MediaBrowserServiceCompat.BrowserRoot(PODPLAY_EMPTY_ROOT_MEDIA_ID, null)
     }
@@ -54,11 +53,11 @@ class PodplayMediaService : MediaBrowserServiceCompat(), PodplayMediaListener {
         // 2
         setSessionToken(mediaSession.sessionToken)
         // 3
-        val callBack = PodplayMediaCallback(this, mediaSession)
+        val callback = PodplayMediaCallback(this, mediaSession)
 
-        callBack.listener = this
+        callback.listener = this
 
-        mediaSession.setCallback(callBack)
+        mediaSession.setCallback(callback)
     }
 
     private fun getPausePlayActions(): Pair<NotificationCompat.Action,
